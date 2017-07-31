@@ -10,3 +10,4 @@ gen
 # project ignore file
 *.avi
 *.mp4
+/result/basic_motion_detection.avi
