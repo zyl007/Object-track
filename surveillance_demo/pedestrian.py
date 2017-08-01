@@ -16,6 +16,7 @@ parser.add_argument("-a", "--algorithm",
     help = "m (or nothing) for meanShift and c for camshift")
 args = vars(parser.parse_args())
 
+
 # 计算中心点
 def center(points):
     """calculates centroid of a given matrix"""
@@ -46,7 +47,7 @@ class Pedestrian():
         # 设置kalman
         self.kalman = cv2.KalmanFilter(4, 2)
         self.kalman.measurementMatrix = np.array([[1,0,0,0], [0,1,0,0]], np.float32)
-        self.kalman.transitionMatrix = np.array([[1,0,1,0], [0,1,0,1], [0,0,1,0], [0,0,0,1]])
+        self.kalman.transitionMatrix = np.array([[1,0,1,0], [0,1,0,1], [0,0,1,0], [0,0,0,1]], np.float32)
         self.kalman.processNoiseCov = np.array([[1,0,0,0], [0,1,0,1], [0,0,1,0], [0,0,0,1]], np.float32)*0.03
 
         # 记录位置
@@ -76,25 +77,31 @@ class Pedestrian():
             ret, self.track_window = cv2.meanShift(back_project, self.track_window, self.term_crit)
             x,y,w,h = self.track_window
             self.center = center([[x,y], [x+w, y], [x, y+h], [x+w, y+h]])
-            cv2.rectangle(frame, (x,y), (x+w, y+h), (255,255,0), 1)
+            # 蓝色框是 meanShift
+            cv2.rectangle(frame, (x,y), (x+w, y+h), (255,0,0), 2)
         # kalman修正，并预测
         self.kalman.correct(self.center)
         predict = self.kalman.predict()
-        cv2.circle(frame, (int(predict[0]), int(predict[1])), 4, (0,255,0), -1)
+        # 卡尔曼滤波预测结果
+        cv2.circle(frame, (int(predict[0]), int(predict[1])), 4, (0,255,0   ), -1)
 
         # fake shadow
-        cv2.putText(frame, "ID: %d -> %s "%(self.id, self.center),(11, (self.id + 1)*25 + 1),
+
+        cv2.putText(frame, " ID: %d -> %s "%(self.id, self.center),(10, (self.id + 1)*25 + 1),
                     font, 0.6, (0,0,0),1,cv2.LINE_AA)
         # actual info
-        cv2.putText(frame, "ID: %d -> %s"%(self.id, self.center), (10, (self.id + 1)*25),
+        cv2.putText(frame, " ID: %d -> %s"%(self.id, self.center), (10, (self.id + 1)*25),
                     font, 0.6, (0, 255, 0), 1, cv2.LINE_AA)
 
 def main():
     # camera = cv2.VideoCapture(path.join(path.dirname(__file__), "traffic.flv"))
-    camera = cv2.VideoCapture("/home/knight/PycharmProjects/Object-track/video/768x576.avi")
+    camera = cv2.VideoCapture("/home/knight/PycharmProjects/Object-track/video/b.mp4")
     # camera = cv2.VideoCapture(path.join(path.dirname(__file__), "..", "movie.mpg"))
+    fps = camera.get(cv2.CAP_PROP_FPS)
+    size = (int(camera.get(cv2.CAP_PROP_FRAME_WIDTH)),
+            int(camera.get(cv2.CAP_PROP_FRAME_HEIGHT)))
     # camera = cv2.VideoCapture(0)
-    history = 20
+    history = 100
     # KNN background subtractor
     bs = cv2.createBackgroundSubtractorKNN(detectShadows=True)
     bs.setHistory(history)
@@ -111,7 +118,7 @@ def main():
     firstFrame = True
     frames = 0
     fourcc = cv2.VideoWriter_fourcc(*'XVID')
-    out = cv2.VideoWriter('output.avi', fourcc, 20.0, (640, 480))
+    out = cv2.VideoWriter('output.avi', fourcc, fps, size)
     while True:
         print(" -------------------- FRAME %d --------------------" % frames)
         grabbed, frame = camera.read()
@@ -129,12 +136,14 @@ def main():
         th = cv2.threshold(fgmask.copy(), 127, 255, cv2.THRESH_BINARY)[1]
         th = cv2.erode(th, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3)), iterations=2)
         dilated = cv2.dilate(th, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (8, 3)), iterations=2)
+        # 计算轮廓
         image, contours, hier = cv2.findContours(dilated, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
         counter = 0
         for c in contours:
             if cv2.contourArea(c) > 500:
                 (x, y, w, h) = cv2.boundingRect(c)
+                # 使用矩形框出轮廓 绿色框
                 cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 1)
                 # only create pedestrians in the first frame, then just follow the ones you have
                 if firstFrame is True:
@@ -148,7 +157,7 @@ def main():
         frames += 1
 
         cv2.imshow("surveillance", frame)
-        out.write(frame)
+        # out.write(frame)
         if cv2.waitKey(110) & 0xff == 27:
             break
     out.release()
